@@ -2,7 +2,7 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-poolpals = "FCy8iFxZmzpdqFhDh8nMEt5maHSCYPijAPqJonChehjJ"
+poolpals = "A4fkmt1rkdVbcAgAXR3g9d7VYfFdwm6kAQRz6zkk35UY"
 
 [registry]
 url = "https://api.apr.dev"

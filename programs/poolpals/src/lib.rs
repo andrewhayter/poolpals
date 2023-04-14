@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("4Et6MKLER9MBDCoKeV8xG3Ei2nxGRTW3sWNYmUcjGdmZ");
+declare_id!("A4fkmt1rkdVbcAgAXR3g9d7VYfFdwm6kAQRz6zkk35UY");
 
 #[account]
 #[derive(InitSpace, Debug, PartialEq, Copy)]
@@ -78,7 +78,7 @@ pub struct BuyTickets<'info> {
 }
 
 #[program]
-pub mod lottery {
+pub mod poolpals {
     use super::*;
 
     pub fn initialize_lottery_state(

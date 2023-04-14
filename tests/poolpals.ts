@@ -3,7 +3,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 const { SystemProgram, PublicKey, Keypair, LAMPORTS_PER_SOL } = anchor.web3;
 import { expect } from "chai";
-import { Lottery } from "../target/types/lottery";
+import { Poolpals } from "../target/types/poolpals";
 
 // Define the sleep function to add a delay
 const sleep = async (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,7 +18,7 @@ async function airdropSOL(program, accountPublicKey, solAmount) {
 describe("Lottery", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
-  const program = anchor.workspace.Lottery as Program<Lottery>;
+  const program = anchor.workspace.Poolpals as Program<Poolpals>;
   const provider = anchor.AnchorProvider.env();
 
   // Define variables to be used throughout the tests
@@ -86,6 +86,9 @@ describe("Lottery", () => {
           program.programId
         );
 
+      console.log("Lottery ID:", lotteryId.toString());
+      console.log("Lottery state address:", lotteryStateAddress.toString());
+
       // Create the lottery vault account with PDA
       const lotteryVaultSeeds = [
         Buffer.from("lottery_vault"),
@@ -131,11 +134,7 @@ describe("Lottery", () => {
       expect(lotteryState.endTime.eq(endTime)).to.be.true;
       expect(lotteryState.maxTickets.eq(maxTickets)).to.be.true;
 
-      console.log(`Lottery ID: ${lotteryId.toString()}`);
-
-      console.log(
-        `Lottery state address: ${lotteryStateAddress.toString()} (https://explorer.solana.com/address/${lotteryStateAddress.toString()}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899)`
-      );
+      console.log("Lottery state:", lotteryState);
 
       lotteryStateAddress = lotteryStateAddress;
     });
