@@ -19,11 +19,9 @@ describe("Lottery", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
   const program = anchor.workspace.Poolpals as Program<Poolpals>;
-  const provider = anchor.AnchorProvider.env();
 
   // Define variables to be used throughout the tests
   let authorityAccount, vaultAccount, authority, vault, user, userAccount;
-
   let lotteryId, lotteryStateAddress;
 
   // Set up the test environment before running the tests
@@ -57,7 +55,7 @@ describe("Lottery", () => {
     );
 
     // Wait for 3 seconds for the airdrops to complete
-    await sleep(3000);
+    await sleep(1000);
   });
 
   // Test suite for initializing the lottery state
@@ -67,12 +65,18 @@ describe("Lottery", () => {
       lotteryId = new anchor.BN(
         Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
       );
-      const ticketPrice = new anchor.BN(Math.round(0.01 * LAMPORTS_PER_SOL));
+      const ticketPrice = new anchor.BN(10_000_000);
       const startTime = new anchor.BN(
         Math.floor(new Date().getTime() / 1000 + 60)
       );
       const endTime = new anchor.BN(startTime.toNumber() + 60 * 60);
       const maxTickets = new anchor.BN(1000);
+
+      console.log("Lottery ID:", lotteryId.toString());
+      console.log("ticketPrice:", ticketPrice);
+      console.log("startTime:", startTime);
+      console.log("endTime:", endTime);
+      console.log("maxTickets:", maxTickets);
 
       // Create the lottery state account with PDA
       const lotteryStateSeeds = [
@@ -144,17 +148,7 @@ describe("Lottery", () => {
   describe("Buy Tickets", () => {
     it("should allow user to buy 1 SOL worth of lottery tickets", async () => {
       // Set the desired amount of SOL to buy in tickets
-      const solAmount = 1;
-      const ticketPrice = new anchor.BN(Math.round(0.05 * LAMPORTS_PER_SOL));
-      const ticketCount = new anchor.BN(solAmount * 1); // 1 SOL = 80 tickets at 0.05 SOL per ticket
-
-      console.log("ticketPrice: ", ticketPrice.toString());
-      console.log("Desired ticket count:", ticketCount.toString());
-
-      // Calculate the deposit amount
-      const depositAmount = ticketCount.div(ticketPrice);
-
-      console.log("depositAmount:", depositAmount.toString());
+      const solAmount = new anchor.BN(4.2 * LAMPORTS_PER_SOL);
 
       // Create the lottery state account with PDA
       const lotteryStateSeeds = [
@@ -174,6 +168,7 @@ describe("Lottery", () => {
         new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8),
         userAccount.toBuffer(),
       ];
+
       const [ticketDataAddress, ticketDataBump] =
         await PublicKey.findProgramAddressSync(
           ticketDataSeeds,
@@ -192,10 +187,14 @@ describe("Lottery", () => {
           program.programId
         );
 
+      console.log(`lotteryStateAddress: ${lotteryStateAddress}`);
+      console.log(`ticketDataAddress: ${ticketDataAddress}`);
+      console.log(`lotteryVaultAddress: ${lotteryVaultAddress}`);
+
       // Buy tickets using the `buyTickets` method
       try {
         await program.methods
-          .buyTickets(ticketCount)
+          .buyTickets(solAmount)
           .accounts({
             lotteryState: lotteryStateAddress,
             lotteryVault: lotteryVaultAddress,
@@ -214,24 +213,16 @@ describe("Lottery", () => {
         ticketDataAddress
       );
 
-      console.log("User ticket data:", userTicketData);
-
       // Fetch the updated lottery state account
       const updatedLotteryState = await program.account.lotteryState.fetch(
         lotteryStateAddress
       );
 
-      console.log("Updated lottery state:", updatedLotteryState);
+      const ticketPrice = updatedLotteryState.ticketPrice;
+      const ticketCount = solAmount.div(ticketPrice);
 
-      // Add assertions to verify if the user has successfully bought the tickets
+      expect(updatedLotteryState.ticketCount.eq(ticketCount)).to.be.true;
       expect(userTicketData.ticketCount.eq(ticketCount)).to.be.true;
-
-      // Add assertions to verify if the lottery state has been updated correctly
-      expect(
-        updatedLotteryState.ticketCount.eq(
-          updatedLotteryState.ticketCount.add(ticketCount)
-        )
-      ).to.be.true;
     });
   });
 });

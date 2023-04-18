@@ -1,4 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
+
+const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 
 declare_id!("A4fkmt1rkdVbcAgAXR3g9d7VYfFdwm6kAQRz6zkk35UY");
 
@@ -18,22 +21,23 @@ pub struct LotteryState {
 }
 
 #[account]
-#[derive(Debug, InitSpace)]
+#[derive(InitSpace, Debug)]
 pub struct LotteryVault {
     lottery_id: u64,
     authority: Pubkey,
 }
 
 #[account]
-#[derive(Debug, InitSpace)]
+#[derive(InitSpace, Debug)]
 pub struct TicketData {
     lottery_id: u64,
     user: Pubkey,
     ticket_count: u64,
     total_deposited: u64,
+    bump: u8,
 }
 
-#[derive(Debug, AnchorSerialize, AnchorDeserialize, PartialEq, Clone, Copy, InitSpace)]
+#[derive(InitSpace, Debug, AnchorSerialize, AnchorDeserialize, PartialEq, Clone, Copy)]
 pub enum LotteryStatus {
     Pending,
     InProgress,
@@ -42,7 +46,7 @@ pub enum LotteryStatus {
 }
 
 #[derive(Accounts)]
-#[instruction(lottery_id: u64, bump: u8)]
+#[instruction(lottery_id: u64)]
 pub struct InitializeLottery<'info> {
     #[account(init, payer = authority, space = 8 + LotteryState::INIT_SPACE, seeds = [b"lottery_state", lottery_id.to_le_bytes().as_ref()], bump)]
     pub lottery_state: Account<'info, LotteryState>,
@@ -62,7 +66,7 @@ pub struct BuyTickets<'info> {
     pub lottery_vault: Account<'info, LotteryVault>,
     #[account(
         seeds = [
-            b"user_ticket_data",
+            "user_ticket_data".as_bytes(),
             lottery_state.lottery_id.to_le_bytes().as_ref(),
             user.key().as_ref()
         ],
@@ -91,6 +95,7 @@ pub mod poolpals {
     ) -> Result<()> {
         // Initialize the lottery state account
         let lottery_state = &mut ctx.accounts.lottery_state;
+
         lottery_state.authority = *ctx.accounts.authority.key;
         lottery_state.lottery_id = lottery_id;
         lottery_state.status = LotteryStatus::Pending;
@@ -114,23 +119,15 @@ pub mod poolpals {
         let lottery_state = &mut ctx.accounts.lottery_state;
         let ticket_data = &mut ctx.accounts.ticket_data;
 
-        msg!("ctx.accounts.user.key: {}", ctx.accounts.user.key);
-        msg!("deposit: {}", deposit);
-        msg!("lottery_state: {:?}", lottery_state);
-        msg!("before ticket_data: {:?}", ticket_data);
-
-        // fix this
         if ticket_data.lottery_id == 0 {
             ticket_data.lottery_id = lottery_state.lottery_id;
             ticket_data.user = *ctx.accounts.user.key;
             ticket_data.ticket_count = 0;
         }
 
-        msg!("after ticket_data: {:?}", ticket_data);
-
-        // if ticket_data.lottery_id != lottery_state.lottery_id {
-        //     return Err(LotteryError::InvalidLotteryId.into());
-        // }
+        if ticket_data.lottery_id != lottery_state.lottery_id {
+            return Err(LotteryError::InvalidLotteryId.into());
+        }
 
         // // if lottery_state.status != LotteryStatus::InProgress {
         // //     return Err(LotteryError::LotteryNotInProgress.into());
@@ -145,69 +142,45 @@ pub mod poolpals {
         //     return Err(LotteryError::InsufficientFunds.into());
         // }
 
-        // let ticket_count = deposit
-        //     .checked_div(lottery_state.ticket_price)
-        //     .ok_or(LotteryError::Overflow)?;
-        // if lottery_state
-        //     .ticket_count
-        //     .checked_add(ticket_count)
-        //     .ok_or(LotteryError::Overflow)?
-        //     > lottery_state.max_tickets
-        // {
-        //     return Err(LotteryError::InsufficientRemainingTickets.into());
-        // }
+        let ticket_count = (deposit) / lottery_state.ticket_price;
 
-        // ticket_data.ticket_count = ticket_data
-        //     .ticket_count
-        //     .checked_add(ticket_count)
-        //     .ok_or(LotteryError::Overflow)?;
+        if lottery_state
+            .ticket_count
+            .checked_add(ticket_count)
+            .ok_or(LotteryError::Overflow)?
+            > lottery_state.max_tickets
+        {
+            return Err(LotteryError::InsufficientRemainingTickets.into());
+        }
 
-        // lottery_state.ticket_count = lottery_state
-        //     .ticket_count
-        //     .checked_add(ticket_count)
-        //     .ok_or(LotteryError::Overflow)?;
-        // lottery_state.prize_pool = lottery_state
-        //     .prize_pool
-        //     .checked_add(deposit)
-        //     .ok_or(LotteryError::Overflow)?;
-
-        // ticket_data.total_deposited = ticket_data
-        //     .total_deposited
-        //     .checked_add(deposit)
-        //     .ok_or(LotteryError::Overflow)?;
-
-        // Transfer lamports to the lottery vault
-        // let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
-        //     ctx.accounts.user.key,
-        //     &ctx.accounts.lottery_vault.key(),
-        //     deposit,
-        // );
-
-        // let accounts = [
-        //     ctx.accounts.user.to_account_info(),
-        //     ctx.accounts.lottery_vault.to_account_info(),
-        //     ctx.accounts.system_program.to_account_info(),
-        // ];
-
-        msg!("CTX USER: {:?}", ctx.accounts.user.to_account_info());
-        msg!(
-            "CTX VAULT: {:?}",
-            ctx.accounts.lottery_vault.to_account_info()
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.user.to_account_info().clone(),
+                to: ctx.accounts.lottery_vault.to_account_info().clone(),
+            },
         );
-        msg!(
-            "CTX SYS: {:?}",
-            ctx.accounts.system_program.to_account_info()
-        );
+        system_program::transfer(cpi_context, deposit)?;
 
-        // anchor_lang::solana_program::program::invoke_signed(
-        //     &transfer_instruction,
-        //     &accounts,
-        //     &[&[
-        //         b"user_ticket_data",
-        //         ctx.accounts.lottery_state.lottery_id.to_le_bytes().as_ref(),
-        //         ctx.accounts.user.key.as_ref(),
-        //     ]],
-        // )?;
+        ticket_data.ticket_count = ticket_data
+            .ticket_count
+            .checked_add(ticket_count)
+            .ok_or(LotteryError::Overflow)?;
+
+        ticket_data.total_deposited = ticket_data
+            .total_deposited
+            .checked_add(deposit * LAMPORTS_PER_SOL)
+            .ok_or(LotteryError::Overflow)?;
+
+        lottery_state.ticket_count = lottery_state
+            .ticket_count
+            .checked_add(ticket_count)
+            .ok_or(LotteryError::Overflow)?;
+
+        lottery_state.prize_pool = lottery_state
+            .prize_pool
+            .checked_add(deposit)
+            .ok_or(LotteryError::Overflow)?;
 
         Ok(())
     }

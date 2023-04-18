@@ -1,5 +1,5 @@
 [features]
-seeds = false
+seeds = true
 skip-lint = false
 [programs.localnet]
 poolpals = "A4fkmt1rkdVbcAgAXR3g9d7VYfFdwm6kAQRz6zkk35UY"
