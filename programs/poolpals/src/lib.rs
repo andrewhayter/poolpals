@@ -1,7 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
+// pub mod utils;
+// pub use utils::*;
+
 const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
+const LOTTERY_STATE_SEED: &[u8] = b"lottery_state";
+const LOTTERY_VAULT_SEED: &[u8] = b"lottery_vault";
+const USER_TICKET_DATA_SEED: &[u8] = b"user_ticket_data";
 
 declare_id!("A4fkmt1rkdVbcAgAXR3g9d7VYfFdwm6kAQRz6zkk35UY");
 
@@ -48,9 +54,9 @@ pub enum LotteryStatus {
 #[derive(Accounts)]
 #[instruction(lottery_id: u64)]
 pub struct InitializeLottery<'info> {
-    #[account(init, payer = authority, space = 8 + LotteryState::INIT_SPACE, seeds = [b"lottery_state", lottery_id.to_le_bytes().as_ref()], bump)]
+    #[account(init, payer = authority, space = 8 + LotteryState::INIT_SPACE, seeds = [LOTTERY_STATE_SEED, lottery_id.to_le_bytes().as_ref()], bump)]
     pub lottery_state: Account<'info, LotteryState>,
-    #[account(init, payer = authority, space = 8 + LotteryVault::INIT_SPACE, seeds = [b"lottery_vault", lottery_id.to_le_bytes().as_ref()], bump)]
+    #[account(init, payer = authority, space = 8 + LotteryVault::INIT_SPACE, seeds = [LOTTERY_VAULT_SEED, lottery_id.to_le_bytes().as_ref()], bump)]
     pub lottery_vault: Account<'info, LotteryVault>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -66,7 +72,7 @@ pub struct BuyTickets<'info> {
     pub lottery_vault: Account<'info, LotteryVault>,
     #[account(
         seeds = [
-            "user_ticket_data".as_bytes(),
+            USER_TICKET_DATA_SEED,
             lottery_state.lottery_id.to_le_bytes().as_ref(),
             user.key().as_ref()
         ],
@@ -137,19 +143,13 @@ pub mod poolpals {
         //     return Err(LotteryError::InvalidDeposit.into());
         // }
 
-        // let user_balance = ctx.accounts.user.lamports();
-        // if user_balance < deposit {
-        //     return Err(LotteryError::InsufficientFunds.into());
-        // }
+        let user_balance = ctx.accounts.user.lamports();
+        if user_balance < deposit {
+            return Err(LotteryError::InsufficientFunds.into());
+        }
 
-        let ticket_count = (deposit) / lottery_state.ticket_price;
-
-        if lottery_state
-            .ticket_count
-            .checked_add(ticket_count)
-            .ok_or(LotteryError::Overflow)?
-            > lottery_state.max_tickets
-        {
+        let ticket_count = deposit / lottery_state.ticket_price;
+        if lottery_state.ticket_count + ticket_count > lottery_state.max_tickets {
             return Err(LotteryError::InsufficientRemainingTickets.into());
         }
 
@@ -206,4 +206,10 @@ pub enum LotteryError {
     Unauthorized,
     #[msg("Invalid status transition.")]
     InvalidStatusTransition,
+    #[msg("The lottery has not ended yet")]
+    LotteryNotEnded,
+    #[msg("There are no tickets purchased")]
+    NoTickets,
+    #[msg("No winner was selected")]
+    NoWinner,
 }
